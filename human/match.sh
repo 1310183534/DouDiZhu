@@ -1,0 +1,1 @@
+/home/tiansuan/zys/anaconda3/bin/python3 /home/tiansuan/zys/lord/human/match.py $@

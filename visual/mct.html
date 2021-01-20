@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<meta charset='utf-8'>
+<style>
+	body {
+		width: 1200px;
+		margin: 10px auto;
+	}
+
+	circle {
+		fill: white;
+		stroke: steelblue;
+		stroke-width: 2px;
+	}
+
+	line {
+		stroke: grey;
+		stroke-width: 3px;
+	}
+
+	text {
+		text-anchor:middle;
+		/*fill: #AA22FF;*/
+	}
+</style>
+<body>
+<script src='d3/d3.js'></script>
+
+<script type='text/javascript'>
+	d3.json('mct.json', function (rootData) {
+		var svgW = 1200, svgH = 700, vRad = 20;
+		var tree = {cx: svgW / 2, cy: 20, w: 60, h: 120};
+
+		function dfs(nodeData) {
+			var node = {
+				v: nodeData.name,
+				action: nodeData.action,
+				P: nodeData.P,
+				N: nodeData.N,
+				Q: nodeData.Q,
+				p: {},
+				c: [],
+				active: false
+			};
+			if (nodeData.children) {
+				node.c = nodeData.children.map(dfs);
+			}
+			return node;
+		}
+
+		tree.root = {
+			v: rootData.name,
+			action: rootData.action,
+			P: rootData.P,
+			N: rootData.N,
+			Q: rootData.Q,
+			p: {x: tree.cx, y: tree.cy},
+			c: rootData.children.map(dfs),
+			active: true
+		};
+
+		function getLeafCount(node) {
+			if (node.c.length === 0 || node.active === false) return 1;
+			else return node.c.map(getLeafCount).reduce(function (sum, item) {
+				return sum + item;
+			});
+		}
+
+		function reposition(node) {
+			if (node.active) {
+				var lC = getLeafCount(node), left = node.p.x - tree.w * (lC - 1) / 2;
+				node.c.forEach(function (child) {
+					var w = tree.w * getLeafCount(child);
+					left += w;
+					child.p = {x: left - (w + tree.w) / 2, y: node.p.y + tree.h};
+					reposition(child);
+				});
+			}
+		}
+
+		tree.getVertices = function () {
+			var nodes = [];
+
+			function getVertices(node) {
+				nodes.push(node);
+				if (node.active === true) {
+					node.c.forEach(function (child) {
+						return getVertices(child);
+					});
+				}
+			}
+
+			getVertices(tree.root);
+			return nodes;
+		};
+
+		tree.getEdges = function () {
+			var edges = [];
+
+			function getEdges(node) {
+				if (node.active === true) {
+					node.c.forEach(function (child) {
+						edges.push({p1: node.p, p2: child.p});
+						getEdges(child);
+					});
+				}
+			}
+
+			getEdges(tree.root);
+			return edges;
+		};
+
+		tree.click = function (node) {
+			node.active = !node.active;
+			draw();
+		};
+
+		tree.setActiveAll = function (node, value) {
+			node.active = value;
+			node.c.forEach(function (child) {
+				tree.setActiveAll(child, value);
+			})
+		};
+
+		var zoom = d3.zoom().scaleExtent([0.05, 5]).on('zoom', zoomed);
+
+		function zoomed() {
+			g.attr('transform', d3.event.transform);
+		}
+
+		var svg = d3.select('body').append('svg')
+				.attr('width', svgW).attr('height', svgH).call(zoom);
+
+		var g = svg.append('g');
+
+		var div = d3.select('body').append('div');
+
+		div.append('button').attr('type','button').text('Set Active = true for All Nodes')
+			.on('click', function() { tree.setActiveAll(tree.root, true); draw(); });
+
+		div.append('button').attr('type','button').text('Set Active = false for All Nodes')
+			.on('click', function() { tree.setActiveAll(tree.root, false); draw(); });
+
+		function draw() {
+			g.selectAll('line').remove();
+			g.selectAll('circle').remove();
+			g.selectAll('text').remove();
+
+			reposition(tree.root);
+
+			var edges = tree.getEdges();
+			var nodes = tree.getVertices();
+
+			g.selectAll('line').data(edges).enter().append('line')
+				.attr('x1', function (d) {return d.p1.x;}).attr('y1', function (d) {return d.p1.y;})
+				.attr('x2', function (d) {return d.p2.x;}).attr('y2', function (d) {return d.p2.y;})
+				.on('click', tree.click);
+
+			g.selectAll('circle').data(nodes).enter().append('circle').attr('r', vRad)
+				.attr('cx', function (node) {return node.p.x;}).attr('cy', function (node) {return node.p.y;})
+				.on('click', tree.click);
+
+			g.selectAll('text_N').data(nodes).enter().append('text').attr('font-size', 9)
+				.attr('x', function (node) {return node.p.x;}).attr('y', function (node) {return node.p.y + -8;})
+				.text(function (node) {return node.N;})
+				.on('click', tree.click);
+
+			var linearScale0 = d3.scaleLinear().domain([-1, 0]).range(['rgb(233, 0, 0)', 'rgb(188, 188, 0)']);
+			var linearScale1 = d3.scaleLinear().domain([0, 1]).range(['rgb(188, 188, 0)', 'rgb(0, 233, 0)']);
+
+			g.selectAll('text_A').data(nodes).enter().append('text').attr('font-size', 9)
+				.attr('x', function (node) { return node.p.x; })
+				.attr('y', function (node) { return node.p.y + 0; })
+				.text(function (node) { return node.action; })
+				.on('click', tree.click);
+
+			g.selectAll('text_P').data(nodes).enter().append('text').attr('font-size', 9)
+				.attr('x', function (node) { return node.p.x; })
+				.attr('y', function (node) { return node.p.y + 8; })
+				.text(function (node) { return node.P; })
+				// .attr('fill', function(node) { return linearScale(node.P); })
+				.on('click', tree.click);
+
+			g.selectAll('text_Q').data(nodes).enter().append('text')
+				.attr('font-size', 9)
+				.attr('x', function (node) { return node.p.x; })
+				.attr('y', function (node) { return node.p.y + 16;})
+				.text(function (node) {return node.Q;})
+				.attr('fill', function(node) {
+				    return node.Q <= 0.0 ? linearScale0(node.Q) : linearScale1(node.Q)
+				}).on('click', tree.click);
+		}
+
+		draw();
+	})
+</script>
