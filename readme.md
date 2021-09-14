@@ -22,6 +22,9 @@ cd node
 python compile.py build_ext --inplace
 ```
 
+## pretrained model
+Download pretrained model from <a href="https://drive.google.com/file/d/1Y4WUFrlKIJa7CBbWlOM5pj4VhpKDN4xS/view?usp=sharing">GoogleDrive</a>.
+
 ## self-play data generation
 
 ```shell
